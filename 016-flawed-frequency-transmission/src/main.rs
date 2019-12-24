@@ -24,10 +24,12 @@ fn main() {
     for _ in 0..10000 {
         real_signal_input.append(&mut input_data.clone());
     }
+    println!("Completed generating input");
     let mut res = real_signal_input.clone();
     let offset = convert_offset(res.clone());
+    println!("offset {}", offset);
     for _ in 0..100 {
-        res = get_next_phase(res, &base_pattern);
+        calculate_phase2(&mut res, &base_pattern);
     }
     let (_, rest) = res.split_at(offset as usize);
     let (result, _) = rest.split_at(8);
@@ -65,6 +67,17 @@ fn calculate_phase(input: Vec<i32>, base_pattern: &Vec<i32>) -> Vec<i32> {
     res
 }
 
+fn calculate_phase2(input: &mut Vec<i32>, _base_pattern: &Vec<i32>) {
+    let size = input.len();
+    let mut i = size - 2;
+    let mut acc = input[size - 1];
+    while i > size / 2 {
+        acc = acc + input[i];
+        input[i] = acc % 10;
+        i -= 1;
+    }
+}
+
 fn convert_output(output: Vec<i32>) -> Vec<i32> {
     let mut res = Vec::new();
     for item in output {
@@ -86,6 +99,7 @@ fn calculate_nth_pattern_value(base_pattern: &Vec<i32>, repeat_num: i32, n: i32)
 #[cfg(test)]
 mod test {
     use super::calculate_nth_pattern_value;
+    use super::calculate_phase2;
     use super::convert_offset;
     use super::get_next_phase;
 
@@ -190,48 +204,48 @@ mod test {
         let mut res = real_signal_input.clone();
         let offset = convert_offset(res.clone());
         for _ in 0..100 {
-            res = get_next_phase(res, &vec![0, 1, 0, -1]);
+            calculate_phase2(&mut res, &vec![0, 1, 0, -1]);
         }
         let (_, rest) = res.split_at(offset as usize);
         let (result, _) = rest.split_at(8);
         assert_eq!(result, [8, 4, 4, 6, 2, 0, 2, 6]);
     }
 
-    // #[test]
-    // fn part2_sample_input2() {
-    //     let mut real_signal_input = Vec::new();
-    //     for _ in 0..10000 {
-    //         real_signal_input.append(&mut vec![
-    //             0, 2, 9, 3, 5, 1, 0, 9, 6, 9, 9, 9, 4, 0, 8, 0, 7, 4, 0, 7, 5, 8, 5, 4, 4, 7, 0, 3,
-    //             4, 3, 2, 3,
-    //         ]);
-    //     }
-    //     let mut res = real_signal_input.clone();
-    //     let offset = convert_offset(res.clone());
-    //     for _ in 0..100 {
-    //         res = get_next_phase(res, &vec![0, 1, 0, -1]);
-    //     }
-    //     let (_, rest) = res.split_at(offset as usize);
-    //     let (result, _) = rest.split_at(8);
-    //     assert_eq!(result, [7, 8, 7, 2, 5, 2, 7, 0]);
-    // }
+    #[test]
+    fn part2_sample_input2() {
+        let mut real_signal_input = Vec::new();
+        for _ in 0..10000 {
+            real_signal_input.append(&mut vec![
+                0, 2, 9, 3, 5, 1, 0, 9, 6, 9, 9, 9, 4, 0, 8, 0, 7, 4, 0, 7, 5, 8, 5, 4, 4, 7, 0, 3,
+                4, 3, 2, 3,
+            ]);
+        }
+        let mut res = real_signal_input.clone();
+        let offset = convert_offset(res.clone());
+        for _ in 0..100 {
+            calculate_phase2(&mut res, &vec![0, 1, 0, -1]);
+        }
+        let (_, rest) = res.split_at(offset as usize);
+        let (result, _) = rest.split_at(8);
+        assert_eq!(result, [7, 8, 7, 2, 5, 2, 7, 0]);
+    }
 
-    // #[test]
-    // fn part2_sample_input3() {
-    //     let mut real_signal_input = Vec::new();
-    //     for _ in 0..10000 {
-    //         real_signal_input.append(&mut vec![
-    //             0, 3, 0, 8, 1, 7, 7, 0, 8, 8, 4, 9, 2, 1, 9, 5, 9, 7, 3, 1, 1, 6, 5, 4, 4, 6, 8, 5,
-    //             0, 5, 1, 7,
-    //         ]);
-    //     }
-    //     let mut res = real_signal_input.clone();
-    //     let offset = convert_offset(res.clone());
-    //     for _ in 0..100 {
-    //         res = get_next_phase(res, &vec![0, 1, 0, -1]);
-    //     }
-    //     let (_, rest) = res.split_at(offset as usize);
-    //     let (result, _) = rest.split_at(8);
-    //     assert_eq!(result, [5, 3, 5, 5, 3, 7, 3, 1]);
-    // }
+    #[test]
+    fn part2_sample_input3() {
+        let mut real_signal_input = Vec::new();
+        for _ in 0..10000 {
+            real_signal_input.append(&mut vec![
+                0, 3, 0, 8, 1, 7, 7, 0, 8, 8, 4, 9, 2, 1, 9, 5, 9, 7, 3, 1, 1, 6, 5, 4, 4, 6, 8, 5,
+                0, 5, 1, 7,
+            ]);
+        }
+        let mut res = real_signal_input.clone();
+        let offset = convert_offset(res.clone());
+        for _ in 0..100 {
+            calculate_phase2(&mut res, &vec![0, 1, 0, -1]);
+        }
+        let (_, rest) = res.split_at(offset as usize);
+        let (result, _) = rest.split_at(8);
+        assert_eq!(result, [5, 3, 5, 5, 3, 7, 3, 1]);
+    }
 }
