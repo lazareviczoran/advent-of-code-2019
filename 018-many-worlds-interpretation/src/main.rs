@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+use std::collections::BinaryHeap;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::prelude::*;
@@ -22,117 +24,189 @@ impl PartialEq for Node {
 #[derive(Clone, Debug)]
 struct Distance {
     value: i64,
-    doors: HashSet<Node>,
+    doors: i64,
 }
 impl Distance {
     pub fn new(distance: i64) -> Distance {
         Distance {
             value: distance,
-            doors: HashSet::new(),
+            doors: 0,
         }
+    }
+}
+
+#[derive(Clone, Eq, PartialEq)]
+struct State {
+    robots: Vec<Node>,
+    remaining_keys: i64,
+    cost: i64,
+}
+
+impl Ord for State {
+    fn cmp(&self, other: &State) -> Ordering {
+        other.cost.cmp(&self.cost)
+        // // .then_with(|| self.position.cmp(&other.position))
+    }
+}
+
+impl PartialOrd for State {
+    fn partial_cmp(&self, other: &State) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
 fn main() {
     let mut map_of_the_tunnels = load_map(String::from("input.txt"));
     print_map(&mut map_of_the_tunnels);
-
-    let (_shortest_path, steps_count) = get_collect_keys_shortest_path(&mut map_of_the_tunnels);
     println!(
         "Many-Worlds Interpretation part1 Solution: {:?}",
-        steps_count
+        get_collect_keys_shortest_path(&mut map_of_the_tunnels)
     );
 
-    // println!("Many-Worlds Interpretation part2 Solution: {}", collected_scaffolds);
+    map_of_the_tunnels = load_map(String::from("input-pt2.txt"));
+    print_map(&mut map_of_the_tunnels);
+    println!(
+        "Many-Worlds Interpretation part2 Solution: {}",
+        get_collect_keys_shortest_path2(&mut map_of_the_tunnels)
+    );
 }
 
-fn get_collect_keys_shortest_path(map: &mut Vec<Vec<char>>) -> (Vec<char>, i64) {
-    let shortest_path: Vec<char> = Vec::new();
-    let (start_pos, all_keys, _) = locate_start_pos_and_all_keys_and_doors(map);
-
-    let distances = init_distance_map(map, &all_keys, &start_pos);
+fn get_collect_keys_shortest_path2(map: &mut Vec<Vec<char>>) -> i64 {
+    let (robots, all_keys, _) = locate_start_pos_and_all_keys_and_doors(map);
+    let distances = init_distance_map(map, &all_keys, &robots);
     println!("distances\n");
-    print_distances(&distances);
+    print_distances(&distances, robots.clone());
 
-    let visited_all = (1 << all_keys.len()) - 1;
+    let remaining_keys = (1 << all_keys.len()) - 1;
+
+    let mut seen: HashSet<(String, i64)> = HashSet::new();
+    let mut heap: BinaryHeap<State> = BinaryHeap::new();
+    heap.push(State {
+        robots,
+        remaining_keys,
+        cost: 0,
+    });
+
+    while let Some(State {
+        robots,
+        remaining_keys,
+        cost,
+    }) = heap.pop()
+    {
+        let mut new_remaining_keys = remaining_keys;
+
+        let mut curr_pos = String::new();
+        for i in 0..robots.len() {
+            let curr_node = robots[i].clone();
+            let curr_node_name = curr_node.name;
+            curr_pos.push(curr_node_name);
+            if curr_node_name.is_ascii_lowercase()
+                && !has_bit(new_remaining_keys, curr_node_name as u8 - 'a' as u8)
+            {
+                new_remaining_keys =
+                    unset_bit(new_remaining_keys, curr_node_name as u8 - 'a' as u8);
+            }
+        }
+        if seen.get(&(curr_pos.clone(), new_remaining_keys)).is_some() {
+            continue;
+        }
+        seen.insert((curr_pos, new_remaining_keys));
+
+        if new_remaining_keys == 0 {
+            return cost;
+        }
+
+        for i in 0..robots.len() {
+            let curr_node = robots[i].clone();
+            let curr_node_name = curr_node.name;
+
+            // for each unvisited and unlocked
+            let mut neighbours = all_keys.clone();
+            neighbours.retain(|k| {
+                let distance_between = distances.get(&(curr_node_name, k.name));
+                !has_bit(new_remaining_keys, k.name as u8 - 'a' as u8)
+                    && distance_between.is_some()
+                    && distance_between.unwrap().doors | !new_remaining_keys == !new_remaining_keys
+            });
+            for v in neighbours.iter() {
+                let mut new_robots = robots.clone();
+                new_robots[i] = v.clone();
+                heap.push(State {
+                    robots: new_robots,
+                    remaining_keys: new_remaining_keys,
+                    cost: cost + distances.get(&(curr_node_name, v.name)).unwrap().value,
+                });
+            }
+        }
+    }
+
+    i64::max_value()
+}
+
+fn unset_bit(keys: i64, i: u8) -> i64 {
+    keys & !(1 << i)
+}
+
+fn set_bit(keys: i64, i: u8) -> i64 {
+    keys | (1 << i)
+}
+
+fn has_bit(keys: i64, i: u8) -> bool {
+    keys & (1 << i) == 0
+}
+
+fn get_collect_keys_shortest_path(map: &mut Vec<Vec<char>>) -> i64 {
+    let (robots, all_keys, _) = locate_start_pos_and_all_keys_and_doors(map);
+    let start_pos = robots[0].clone();
+
+    let distances = init_distance_map(map, &all_keys, &robots);
+    println!("distances\n");
+    print_distances(&distances, robots.clone());
+
     let mask = 0;
     let mut dp: HashMap<(i64, Node), i64> = HashMap::new();
-    let shortest_path_steps = tsp(
-        mask,
-        start_pos.clone(),
-        all_keys.clone(),
-        all_keys,
-        distances,
-        &mut dp,
-        visited_all,
-    );
+    let remaining_keys = (1 << all_keys.len()) - 1;
+    let shortest_path_steps = tsp(mask, start_pos.clone(), all_keys, distances, &mut dp);
 
-    (shortest_path, shortest_path_steps)
+    shortest_path_steps
 }
 
 fn tsp(
     mask: i64,
     curr_node: Node,
     all_keys: HashSet<Node>,
-    remaining_keys: HashSet<Node>,
     distances: HashMap<(char, char), Distance>,
     dp: &mut HashMap<(i64, Node), i64>,
-    visited_all: i64,
 ) -> i64 {
-    if 64 - mask.count_zeros() == (all_keys.len() - 1) as u32 {
-        let mut new_remaining_keys = remaining_keys.clone();
-        new_remaining_keys.remove(&curr_node);
-        let mut iter = new_remaining_keys.iter();
-
-        return distances
-            .get(&(curr_node.name, iter.next().unwrap().name))
-            .unwrap()
-            .value;
-    }
     if let Some(value) = dp.get(&(mask, curr_node.clone())) {
         return *value;
     }
     let curr_node_name = curr_node.clone().name;
 
     let mut ans = i64::max_value();
-    let mut distances_clone = distances.clone();
-
-    for (_, distance) in distances_clone.iter_mut() {
-        (*distance)
-            .doors
-            .retain(|k| k.name != curr_node_name.to_ascii_uppercase())
-    }
 
     // for each unvisited and unlocked
-    let mut new_remaining_keys = remaining_keys.clone();
-    new_remaining_keys.remove(&curr_node);
-
-    let mut neighbours = new_remaining_keys.clone();
+    let mut neighbours = all_keys.clone();
     neighbours.retain(|k| {
-        distances_clone
-            .get(&(curr_node_name, k.name))
-            .unwrap()
-            .doors
-            .len()
-            == 0
+        let distance_between = distances.get(&(curr_node_name, k.name));
+        has_bit(mask, k.name as u8 - 'a' as u8)
+            && distance_between.is_some()
+            && distance_between.unwrap().doors | mask == mask
     });
+    if neighbours.len() == 0 {
+        return 0;
+    }
     for v in neighbours.iter() {
         let city = v.name as u8 - 'a' as u8;
         if mask & (1 << city) == 0 {
-            let new_ans = distances_clone
-                .get(&(curr_node_name, v.name))
-                .unwrap()
-                .value
-                + tsp(
-                    mask | (1 << city),
-                    v.clone(),
-                    all_keys.clone(),
-                    new_remaining_keys.clone(),
-                    distances_clone.clone(),
-                    dp,
-                    visited_all,
-                );
-
+            let best_dist = tsp(
+                mask | (1 << city),
+                v.clone(),
+                all_keys.clone(),
+                distances.clone(),
+                dp,
+            );
+            let new_ans = distances.get(&(curr_node_name, v.name)).unwrap().value + best_dist;
             if ans > new_ans {
                 ans = new_ans;
             }
@@ -145,11 +219,13 @@ fn tsp(
 fn init_distance_map(
     map: &mut Vec<Vec<char>>,
     keys: &HashSet<Node>,
-    start_pos: &Node,
+    robots: &Vec<Node>,
 ) -> HashMap<(char, char), Distance> {
     let mut distances = HashMap::new();
     let mut keys_with_start = keys.clone();
-    keys_with_start.insert(start_pos.clone());
+    for robot in robots {
+        keys_with_start.insert(robot.clone());
+    }
     let keys_clone = keys_with_start.clone();
 
     for key in keys_with_start {
@@ -181,7 +257,7 @@ fn find_distances_from(
                 while let Some(parent) = parents.get(&curr_el) {
                     distance.value += 1;
                     if curr_el.name.is_ascii_uppercase() {
-                        distance.doors.insert(curr_el);
+                        distance.doors = set_bit(distance.doors, curr_el.name as u8 - 'A' as u8);
                     }
                     curr_el = parent.clone();
                 }
@@ -236,8 +312,9 @@ fn get_value(map: &mut Vec<Vec<char>>, curr_pos: &Node) -> char {
 
 fn locate_start_pos_and_all_keys_and_doors(
     map: &mut Vec<Vec<char>>,
-) -> (Node, HashSet<Node>, HashSet<Node>) {
-    let mut start_pos = Node::new('@', 0, 0);
+) -> (Vec<Node>, HashSet<Node>, HashSet<Node>) {
+    let mut robot_count = 1;
+    let mut robots = Vec::new();
     let mut keys = HashSet::new();
     let mut doors = HashSet::new();
     for i in 0..map.len() {
@@ -245,7 +322,13 @@ fn locate_start_pos_and_all_keys_and_doors(
             let curr_char = map[i][j];
 
             if curr_char == '@' {
-                start_pos = Node::new('@', i as i64, j as i64);
+                let start_pos = Node::new(
+                    std::char::from_digit(robot_count, 10).unwrap(),
+                    i as i64,
+                    j as i64,
+                );
+                robots.push(start_pos);
+                robot_count += 1;
             } else if curr_char.is_ascii_lowercase() {
                 keys.insert(Node::new(curr_char, i as i64, j as i64));
             } else if curr_char.is_ascii_uppercase() {
@@ -254,7 +337,7 @@ fn locate_start_pos_and_all_keys_and_doors(
         }
     }
 
-    (start_pos, keys, doors)
+    (robots, keys, doors)
 }
 
 fn load_map(filename: String) -> Vec<Vec<char>> {
@@ -290,11 +373,13 @@ fn print_map(map: &mut Vec<Vec<char>>) {
     println!("{}", sb)
 }
 
-fn print_distances(map: &HashMap<(char, char), Distance>) {
+fn print_distances(map: &HashMap<(char, char), Distance>, robots: Vec<Node>) {
     let mut string = String::new();
     string.push_str(format!("{:4}", ' ').as_str());
     let mut keys: Vec<char> = (0..26).map(|x| ('a' as u8 + x) as char).collect();
-    keys.insert(0, '@');
+    for i in 0..robots.len() {
+        keys.insert(i, robots[i].name);
+    }
     for i in keys.clone() {
         string.push_str(format!("{:4}", i).as_str());
     }
@@ -315,98 +400,70 @@ fn print_distances(map: &HashMap<(char, char), Distance>) {
 
 #[cfg(test)]
 mod test {
-    use super::get_collect_keys_shortest_path;
+    use super::get_collect_keys_shortest_path2;
     use super::load_map;
 
     #[test]
     fn part1_sample_input1() {
         let mut map_of_the_tunnels = load_map(String::from("test-input1.txt"));
-        let (_shortest_path, steps_count) = get_collect_keys_shortest_path(&mut map_of_the_tunnels);
-        assert_eq!(steps_count, 8);
+        assert_eq!(get_collect_keys_shortest_path2(&mut map_of_the_tunnels), 8);
     }
 
     #[test]
     fn part1_sample_input2() {
         let mut map_of_the_tunnels = load_map(String::from("test-input2.txt"));
-        let (_shortest_path, steps_count) = get_collect_keys_shortest_path(&mut map_of_the_tunnels);
-        assert_eq!(steps_count, 86);
+        assert_eq!(get_collect_keys_shortest_path2(&mut map_of_the_tunnels), 86);
     }
 
     #[test]
     fn part1_sample_input3() {
         let mut map_of_the_tunnels = load_map(String::from("test-input3.txt"));
-        let (_shortest_path, steps_count) = get_collect_keys_shortest_path(&mut map_of_the_tunnels);
-        assert_eq!(steps_count, 132);
+        assert_eq!(
+            get_collect_keys_shortest_path2(&mut map_of_the_tunnels),
+            132
+        );
     }
 
     #[test]
     fn part1_sample_input4() {
         let mut map_of_the_tunnels = load_map(String::from("test-input4.txt"));
-        let (_shortest_path, steps_count) = get_collect_keys_shortest_path(&mut map_of_the_tunnels);
-        assert_eq!(steps_count, 136);
+        assert_eq!(
+            get_collect_keys_shortest_path2(&mut map_of_the_tunnels),
+            136
+        );
     }
 
     #[test]
     fn part1_sample_input5() {
         let mut map_of_the_tunnels = load_map(String::from("test-input5.txt"));
-        let (_shortest_path, steps_count) = get_collect_keys_shortest_path(&mut map_of_the_tunnels);
-        assert_eq!(steps_count, 81);
+        assert_eq!(get_collect_keys_shortest_path2(&mut map_of_the_tunnels), 81);
     }
 
-    // #[test]
-    // fn part2_sample_input1() {
-    //     let mut real_signal_input = Vec::new();
-    //     for _ in 0..10000 {
-    //         real_signal_input.append(&mut vec![
-    //             0, 3, 0, 3, 6, 7, 3, 2, 5, 7, 7, 2, 1, 2, 9, 4, 4, 0, 6, 3, 4, 9, 1, 5, 6, 5, 4, 7,
-    //             4, 6, 6, 4,
-    //         ]);
-    //     }
-    //     let mut res = real_signal_input.clone();
-    //     let offset = convert_offset(res.clone());
-    //     for _ in 0..100 {
-    //         calculate_phase2(&mut res, &vec![0, 1, 0, -1]);
-    //     }
-    //     let (_, rest) = res.split_at(offset as usize);
-    //     let (result, _) = rest.split_at(8);
-    //     assert_eq!(result, [8, 4, 4, 6, 2, 0, 2, 6]);
-    // }
+    #[test]
+    fn part2_sample_input1() {
+        let mut map_of_the_tunnels = load_map(String::from("test-input6.txt"));
+        let steps_count = get_collect_keys_shortest_path2(&mut map_of_the_tunnels);
+        assert_eq!(steps_count, 8);
+    }
 
-    // #[test]
-    // fn part2_sample_input2() {
-    //     let mut real_signal_input = Vec::new();
-    //     for _ in 0..10000 {
-    //         real_signal_input.append(&mut vec![
-    //             0, 2, 9, 3, 5, 1, 0, 9, 6, 9, 9, 9, 4, 0, 8, 0, 7, 4, 0, 7, 5, 8, 5, 4, 4, 7, 0, 3,
-    //             4, 3, 2, 3,
-    //         ]);
-    //     }
-    //     let mut res = real_signal_input.clone();
-    //     let offset = convert_offset(res.clone());
-    //     for _ in 0..100 {
-    //         calculate_phase2(&mut res, &vec![0, 1, 0, -1]);
-    //     }
-    //     let (_, rest) = res.split_at(offset as usize);
-    //     let (result, _) = rest.split_at(8);
-    //     assert_eq!(result, [7, 8, 7, 2, 5, 2, 7, 0]);
-    // }
+    #[test]
+    fn part2_sample_input2() {
+        let mut map_of_the_tunnels = load_map(String::from("test-input7.txt"));
+        let steps_count = get_collect_keys_shortest_path2(&mut map_of_the_tunnels);
+        assert_eq!(steps_count, 24);
+    }
 
-    // #[test]
-    // fn part2_sample_input3() {
-    //     let mut real_signal_input = Vec::new();
-    //     for _ in 0..10000 {
-    //         real_signal_input.append(&mut vec![
-    //             0, 3, 0, 8, 1, 7, 7, 0, 8, 8, 4, 9, 2, 1, 9, 5, 9, 7, 3, 1, 1, 6, 5, 4, 4, 6, 8, 5,
-    //             0, 5, 1, 7,
-    //         ]);
-    //     }
-    //     let mut res = real_signal_input.clone();
-    //     let offset = convert_offset(res.clone());
-    //     for _ in 0..100 {
-    //         calculate_phase2(&mut res, &vec![0, 1, 0, -1]);
-    //     }
-    //     let (_, rest) = res.split_at(offset as usize);
-    //     let (result, _) = rest.split_at(8);
-    //     assert_eq!(result, [5, 3, 5, 5, 3, 7, 3, 1]);
-    // }
+    #[test]
+    fn part2_sample_input3() {
+        let mut map_of_the_tunnels = load_map(String::from("test-input8.txt"));
+        let steps_count = get_collect_keys_shortest_path2(&mut map_of_the_tunnels);
+        assert_eq!(steps_count, 32);
+    }
+
+    #[test]
+    fn part2_sample_input4() {
+        let mut map_of_the_tunnels = load_map(String::from("test-input9.txt"));
+        let steps_count = get_collect_keys_shortest_path2(&mut map_of_the_tunnels);
+        assert_eq!(steps_count, 72);
+    }
 }
