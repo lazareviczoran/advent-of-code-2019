@@ -165,7 +165,6 @@ fn get_collect_keys_shortest_path(map: &mut Vec<Vec<char>>) -> i64 {
 
     let mask = 0;
     let mut dp: HashMap<(i64, Node), i64> = HashMap::new();
-    let remaining_keys = (1 << all_keys.len()) - 1;
     let shortest_path_steps = tsp(mask, start_pos.clone(), all_keys, distances, &mut dp);
 
     shortest_path_steps
