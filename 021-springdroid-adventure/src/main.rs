@@ -27,7 +27,17 @@ fn main() {
 }
 
 fn run_program2(memory: &mut HashMap<i64, i64>) -> i64 {
-    let (output, mut op_pos, mut rel_pos, mut input_pos, _) = compute(memory, &mut vec![], 0, 0, 0);
+    let mut op_pos = 0;
+    let mut rel_pos = 0;
+    let mut input_pos = 0;
+    let mut input = vec![];
+    let output = compute(
+        memory,
+        &mut input,
+        &mut op_pos,
+        &mut rel_pos,
+        &mut input_pos,
+    );
     println!("{}", convert_to_string(output));
 
     let mut input = Vec::new();
@@ -48,7 +58,17 @@ fn run_program2(memory: &mut HashMap<i64, i64>) -> i64 {
 }
 
 fn run_program(memory: &mut HashMap<i64, i64>) -> i64 {
-    let (output, mut op_pos, mut rel_pos, mut input_pos, _) = compute(memory, &mut vec![], 0, 0, 0);
+    let mut op_pos = 0;
+    let mut rel_pos = 0;
+    let mut input_pos = 0;
+    let mut input = vec![];
+    let output = compute(
+        memory,
+        &mut input,
+        &mut op_pos,
+        &mut rel_pos,
+        &mut input_pos,
+    );
     println!("{}", convert_to_string(output));
 
     let mut input = Vec::new();
@@ -77,11 +97,7 @@ fn run_commands(
     for cmd in cmds {
         println!("Running: {}", cmd);
         input.append(&mut convert_to_int_arr(cmd.to_string()));
-        let (output, new_op_pos, new_rel_pos, new_input_pos, _) =
-            compute(memory, input, *op_pos, *rel_pos, *input_pos);
-        *op_pos = new_op_pos;
-        *rel_pos = new_rel_pos;
-        *input_pos = new_input_pos;
+        let output = compute(memory, input, op_pos, rel_pos, input_pos);
 
         final_output = output.clone();
         println!("{}", convert_to_string(output));
@@ -112,72 +128,67 @@ fn convert_to_int_arr(string: String) -> Vec<i64> {
 
 fn compute(
     memory: &mut HashMap<i64, i64>,
-    input: &Vec<i64>,
-    op_position: i64,
-    rel_position: i64,
-    input_position: usize,
-) -> (Vec<i64>, i64, i64, usize, i64) {
+    input: &mut Vec<i64>,
+    op_pos: &mut i64,
+    rel_pos: &mut i64,
+    input_pos: &mut usize,
+) -> Vec<i64> {
     let mut output = Vec::new();
-    let mut op_pos = op_position;
-    let mut rel_base = rel_position;
-    let mut input_pos = input_position;
-    let mut operation_code;
     loop {
-        let (op_code, param_modes) = extract_op_code_and_param_modes(memory, op_pos);
-        operation_code = op_code;
+        let (op_code, param_modes) = extract_op_code_and_param_modes(memory, *op_pos);
 
         let move_by;
         match op_code {
             99 => break,
             1 => {
                 let write_address =
-                    get_write_address(memory, op_code, op_pos, rel_base, param_modes[2]);
-                let args = get_argument_values(memory, op_pos, rel_base, param_modes);
+                    get_write_address(memory, op_code, *op_pos, *rel_pos, param_modes[2]);
+                let args = get_argument_values(memory, *op_pos, *rel_pos, param_modes);
                 memory.insert(write_address, args[0] + args[1]);
                 move_by = 4;
             }
             2 => {
                 let write_address =
-                    get_write_address(memory, op_code, op_pos, rel_base, param_modes[2]);
-                let args = get_argument_values(memory, op_pos, rel_base, param_modes);
+                    get_write_address(memory, op_code, *op_pos, *rel_pos, param_modes[2]);
+                let args = get_argument_values(memory, *op_pos, *rel_pos, param_modes);
                 memory.insert(write_address, args[0] * args[1]);
                 move_by = 4;
             }
             3 => {
                 let write_address =
-                    get_write_address(memory, op_code, op_pos, rel_base, param_modes[0]);
-                if input_pos == input.len() {
-                    return (output, op_pos, rel_base, input_pos, operation_code);
+                    get_write_address(memory, op_code, *op_pos, *rel_pos, param_modes[0]);
+                if *input_pos == input.len() {
+                    return output;
                 }
-                memory.insert(write_address, input[input_pos]);
-                input_pos = input_pos + 1;
+                memory.insert(write_address, input[*input_pos]);
+                *input_pos = *input_pos + 1;
                 move_by = 2;
             }
             4 => {
-                let args = get_argument_values(memory, op_pos, rel_base, param_modes);
+                let args = get_argument_values(memory, *op_pos, *rel_pos, param_modes);
                 output.push(args[0]);
                 move_by = 2;
             }
             5 => {
-                let args = get_argument_values(memory, op_pos, rel_base, param_modes);
+                let args = get_argument_values(memory, *op_pos, *rel_pos, param_modes);
                 if args[0] > 0 {
-                    op_pos = args[1];
+                    *op_pos = args[1];
                     continue;
                 }
                 move_by = 3;
             }
             6 => {
-                let args = get_argument_values(memory, op_pos, rel_base, param_modes);
+                let args = get_argument_values(memory, *op_pos, *rel_pos, param_modes);
                 if args[0] == 0 {
-                    op_pos = args[1];
+                    *op_pos = args[1];
                     continue;
                 }
                 move_by = 3;
             }
             7 => {
                 let write_address =
-                    get_write_address(memory, op_code, op_pos, rel_base, param_modes[2]);
-                let args = get_argument_values(memory, op_pos, rel_base, param_modes);
+                    get_write_address(memory, op_code, *op_pos, *rel_pos, param_modes[2]);
+                let args = get_argument_values(memory, *op_pos, *rel_pos, param_modes);
                 if args[0] < args[1] {
                     memory.insert(write_address, 1);
                 } else {
@@ -187,8 +198,8 @@ fn compute(
             }
             8 => {
                 let write_address =
-                    get_write_address(memory, op_code, op_pos, rel_base, param_modes[2]);
-                let args = get_argument_values(memory, op_pos, rel_base, param_modes);
+                    get_write_address(memory, op_code, *op_pos, *rel_pos, param_modes[2]);
+                let args = get_argument_values(memory, *op_pos, *rel_pos, param_modes);
                 if args[0] == args[1] {
                     memory.insert(write_address, 1);
                 } else {
@@ -197,15 +208,15 @@ fn compute(
                 move_by = 4;
             }
             9 => {
-                let args = get_argument_values(memory, op_pos, rel_base, param_modes);
-                rel_base += args[0];
+                let args = get_argument_values(memory, *op_pos, *rel_pos, param_modes);
+                *rel_pos += args[0];
                 move_by = 2;
             }
             _ => panic!("Something went wrong: {}", op_code),
         }
-        op_pos = op_pos + move_by;
+        *op_pos = *op_pos + move_by;
     }
-    (output, -1, -1, usize::max_value(), operation_code)
+    output
 }
 
 fn get_value(memory: &mut HashMap<i64, i64>, key: i64) -> i64 {
