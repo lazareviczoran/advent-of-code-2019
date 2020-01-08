@@ -101,7 +101,7 @@ fn get_collect_keys_shortest_path2(map: &mut Vec<Vec<char>>) -> i64 {
             let curr_node_name = curr_node.name;
             curr_pos.push(curr_node_name);
             if curr_node_name.is_ascii_lowercase()
-                && !has_bit(new_remaining_keys, curr_node_name as u8 - 'a' as u8)
+                && has_bit(new_remaining_keys, curr_node_name as u8 - 'a' as u8)
             {
                 new_remaining_keys =
                     unset_bit(new_remaining_keys, curr_node_name as u8 - 'a' as u8);
@@ -124,7 +124,7 @@ fn get_collect_keys_shortest_path2(map: &mut Vec<Vec<char>>) -> i64 {
             let mut neighbours = all_keys.clone();
             neighbours.retain(|k| {
                 let distance_between = distances.get(&(curr_node_name, k.name));
-                !has_bit(new_remaining_keys, k.name as u8 - 'a' as u8)
+                has_bit(new_remaining_keys, k.name as u8 - 'a' as u8)
                     && distance_between.is_some()
                     && distance_between.unwrap().doors | !new_remaining_keys == !new_remaining_keys
             });
@@ -152,7 +152,7 @@ fn set_bit(keys: i64, i: u8) -> i64 {
 }
 
 fn has_bit(keys: i64, i: u8) -> bool {
-    keys & (1 << i) == 0
+    keys & (1 << i) == (1 << i)
 }
 
 fn get_collect_keys_shortest_path(map: &mut Vec<Vec<char>>) -> i64 {
@@ -188,7 +188,7 @@ fn tsp(
     let mut neighbours = all_keys.clone();
     neighbours.retain(|k| {
         let distance_between = distances.get(&(curr_node_name, k.name));
-        has_bit(mask, k.name as u8 - 'a' as u8)
+        !has_bit(mask, k.name as u8 - 'a' as u8)
             && distance_between.is_some()
             && distance_between.unwrap().doors | mask == mask
     });
